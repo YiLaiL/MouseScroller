@@ -25,7 +25,7 @@ chrome.runtime.onInstalled.addListener((details) => {
     console.log('Mouse Scroller 扩展已安装');
     // 设置默认配置
     chrome.storage.local.set({
-      scrollSpeed: 1,
+      scrollSpeed: 1, // 默认使用最低速度
       scrollDirection: 'down'
     });
   } else if (details.reason === 'update') {

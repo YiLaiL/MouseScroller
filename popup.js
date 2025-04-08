@@ -196,7 +196,12 @@ directionToggle.addEventListener('click', () => {
 let speedUpdateTimeout = null;
 scrollSpeed.addEventListener('input', () => {
   const speed = parseInt(scrollSpeed.value);
-  speedValue.textContent = speed;
+  // 更新显示值，当速度大于10时添加"快速模式"
+  if (speed > 10) {
+    speedValue.textContent = `${speed} (快速模式)`;
+  } else {
+    speedValue.textContent = speed;
+  }
   
   // 保存到本地存储
   chrome.storage.local.set({scrollSpeed: speed});

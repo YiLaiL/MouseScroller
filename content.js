@@ -1,21 +1,34 @@
 // 初始化状态
 let isScrolling = false;
 let scrollSpeed = 1;
-let scrollDirection = 'down'; // 新增：滚动方向控制
+let scrollDirection = 'down'; // 滚动方向控制
 let scrollInterval = null;
 let currentElement = null;
-let lastScrollTime = 0; // 新增：用于平滑滚动的时间控制
-let isHovering = false; // 新增：鼠标悬停状态
+let lastScrollTime = 0; // 用于平滑滚动的时间控制
+let isHovering = false; // 鼠标悬停状态
+let isExtensionEnabled = false; // 扩展启用状态标志 - 默认为禁用，等待popup激活
+let lastScrollDirection = 'down'; // 缓存上次滚动方向，防止抖动
 
 // 从存储中恢复设置
-chrome.storage.local.get(['scrollSpeed', 'scrollDirection'], (result) => {
+chrome.storage.local.get(['scrollSpeed', 'scrollDirection', 'isEnabled'], (result) => {
   if (result.scrollSpeed) scrollSpeed = result.scrollSpeed;
-  if (result.scrollDirection) scrollDirection = result.scrollDirection;
+  if (result.scrollDirection) {
+    scrollDirection = result.scrollDirection;
+    lastScrollDirection = result.scrollDirection; // 同步更新缓存的方向
+  }
+  // 检查扩展是否应该启用
+  if (result.isEnabled === true) {
+    isExtensionEnabled = true;
+    // 注意：这里不自动设置isScrolling为true，避免自动开始滚动
+    // 用户需要通过popup或快捷键明确启动滚动功能
+  }
 });
 
 // 鼠标移动事件处理
 document.addEventListener('mousemove', (e) => {
-  if (!isScrolling) return;
+  // 如果扩展被禁用或不处于滚动状态，直接返回
+  if (!isExtensionEnabled || !isScrolling) return;
+  
   currentElement = e.target;
   isHovering = true;
   
@@ -29,7 +42,9 @@ document.addEventListener('mousemove', (e) => {
 
 // 鼠标离开事件处理
 document.addEventListener('mouseout', (e) => {
-  if (!isScrolling) return;
+  // 如果扩展被禁用或不处于滚动状态，直接返回
+  if (!isExtensionEnabled || !isScrolling) return;
+  
   if (e.target === currentElement) {
     currentElement = null;
     isHovering = false;
@@ -40,33 +55,71 @@ document.addEventListener('mouseout', (e) => {
 document.addEventListener('keydown', (e) => {
   // Alt+S 切换滚动状态
   if (e.altKey && e.key === 's') {
-    isScrolling = !isScrolling;
-    if (isScrolling) {
-      if (!scrollInterval) {
-        scrollInterval = setInterval(scroll, 16); // 约60fps的刷新率
+    // 只有在扩展启用时才允许切换滚动状态
+    if (isExtensionEnabled) {
+      isScrolling = !isScrolling;
+      if (isScrolling) {
+        if (!scrollInterval) {
+          scrollInterval = setInterval(scroll, 16); // 约60fps的刷新率
+        }
+      } else {
+        stopScrolling(); // 使用集中的停止滚动函数
       }
-    } else {
-      if (scrollInterval) {
-        clearInterval(scrollInterval);
-        scrollInterval = null;
-      }
+      // 通知popup状态变化
+      chrome.runtime.sendMessage({action: 'statusChanged', isScrolling});
     }
-    // 通知popup状态变化
-    chrome.runtime.sendMessage({action: 'statusChanged', isScrolling});
   }
   
   // Alt+D 切换滚动方向
   if (e.altKey && e.key === 'd') {
-    scrollDirection = scrollDirection === 'down' ? 'up' : 'down';
-    chrome.storage.local.set({scrollDirection});
-    // 通知popup状态变化
-    chrome.runtime.sendMessage({action: 'directionChanged', scrollDirection});
+    // 只有在扩展启用时才允许切换滚动方向
+    if (isExtensionEnabled) {
+      scrollDirection = scrollDirection === 'down' ? 'up' : 'down';
+      lastScrollDirection = scrollDirection; // 同步更新缓存的方向
+      chrome.storage.local.set({scrollDirection});
+      // 通知popup状态变化
+      chrome.runtime.sendMessage({action: 'directionChanged', scrollDirection});
+    }
   }
 });
 
+// 集中的停止滚动函数 - 确保所有状态和定时器都被正确清除
+function stopScrolling() {
+  // 确保定时器被清除
+  if (scrollInterval) {
+    clearInterval(scrollInterval);
+    scrollInterval = null;
+  }
+  
+  // 重置所有相关状态变量
+  isScrolling = false;
+  currentElement = null;
+  isHovering = false;
+  lastScrollTime = 0;
+  
+  // 清除可能存在的防抖定时器
+  if (window.moveDebounce) {
+    clearTimeout(window.moveDebounce);
+    window.moveDebounce = null;
+  }
+  
+  // 确保不会有任何滚动行为
+  console.log('滚动功能已停止');
+}
+
 // 滚动函数 - 使用requestAnimationFrame优化性能和平滑度
 function scroll() {
-  if (!currentElement || !isScrolling || !isHovering) return;
+  // 严格检查：如果扩展被禁用或不处于滚动状态，立即返回并确保停止所有滚动
+  if (!isExtensionEnabled || !isScrolling) {
+    // 如果滚动间隔仍然存在，清除它
+    if (scrollInterval) {
+      clearInterval(scrollInterval);
+      scrollInterval = null;
+    }
+    return;
+  }
+  // 如果没有当前元素或不处于悬停状态，也返回
+  if (!currentElement || !isHovering) return;
   
   const now = performance.now();
   const elapsed = now - lastScrollTime;
@@ -87,10 +140,14 @@ function scroll() {
     }
     
     // 计算滚动距离 - 使用非线性映射提供更精细的控制
-    const scrollAmount = Math.pow(scrollSpeed, 1.5); // 非线性映射
+    // 优化的速度计算公式，使低速区域更精细，高速区域更快，最大速度为原来的10倍
+    const scrollAmount = scrollSpeed <= 10 
+      ? Math.pow(scrollSpeed, 1.5) // 原始公式用于1-10的速度范围
+      : Math.pow(10, 1.5) + (scrollSpeed - 10) * Math.pow(10, 1.3) / 9; // 10-100范围的加速公式
     
+    // 使用缓存的滚动方向，防止在滚动过程中被修改导致抖动
     // 根据方向执行滚动
-    if (scrollDirection === 'down') {
+    if (lastScrollDirection === 'down') {
       scrollableElement.scrollBy({
         top: scrollAmount,
         behavior: 'auto' // 使用auto而不是smooth以避免滞后感
@@ -133,20 +190,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     
     if (request.action === 'toggleScrolling') {
-      isScrolling = request.enabled;
-      if (isScrolling) {
+      // 更新扩展启用状态和滚动状态
+      isExtensionEnabled = request.enabled;
+      
+      // 只有当扩展启用时，才设置滚动状态为启用
+      if (isExtensionEnabled) {
+        isScrolling = true;
         // 启动滚动 - 使用更高的刷新率
         if (!scrollInterval) {
           scrollInterval = setInterval(scroll, 16); // 约60fps
         }
       } else {
-        // 停止滚动
-        if (scrollInterval) {
-          clearInterval(scrollInterval);
-          scrollInterval = null;
-        }
-        currentElement = null;
-        isHovering = false;
+        // 如果扩展被禁用，确保停止滚动并清除所有状态
+        isScrolling = false;
+        stopScrolling();
       }
       sendResponse({isScrolling});
       return true;
@@ -162,6 +219,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     if (request.action === 'updateDirection') {
       scrollDirection = request.direction;
+      lastScrollDirection = request.direction; // 同步更新缓存的方向
       // 保存到存储中
       chrome.storage.local.set({scrollDirection});
       sendResponse({direction: scrollDirection});
@@ -182,3 +240,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // 初始化时发送就绪消息
 chrome.runtime.sendMessage({action: 'contentScriptReady'});
+
+// 页面卸载时清理资源
+window.addEventListener('unload', () => {
+  stopScrolling();
+});
