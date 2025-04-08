@@ -3,7 +3,8 @@
   "name": "Mouse Scroller",
   "version": "1.0",
   "description": "自动滚动鼠标悬停位置的扩展",
-  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "minimum_chrome_version": "88",
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "management"],
   "background": {
     "service_worker": "background.js"
   },
@@ -25,7 +26,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["switch.css", "images/*"],
+      "resources": ["images/*"],
       "matches": ["<all_urls>"]
     }
   ],
@@ -33,5 +34,19 @@
     "16": "images/icon16.png",
     "48": "images/icon48.png",
     "128": "images/icon128.png"
+  },
+  "commands": {
+    "toggle-scrolling": {
+      "suggested_key": {
+        "default": "Alt+S"
+      },
+      "description": "切换滚动状态"
+    },
+    "toggle-direction": {
+      "suggested_key": {
+        "default": "Alt+X"
+      },
+      "description": "切换滚动方向"
+    }
   }
 }

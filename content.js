@@ -1,13 +1,13 @@
 // 初始化状态
-let isScrolling = false;
-let scrollSpeed = 1;
-let scrollDirection = 'down'; // 滚动方向控制
-let scrollInterval = null;
-let currentElement = null;
-let lastScrollTime = 0; // 用于平滑滚动的时间控制
-let isHovering = false; // 鼠标悬停状态
-let isExtensionEnabled = false; // 扩展启用状态标志 - 默认为禁用，等待popup激活
-let lastScrollDirection = 'down'; // 缓存上次滚动方向，防止抖动
+let isScrolling = false,
+    scrollSpeed = 1,
+    scrollDirection = 'down',
+    scrollInterval = null,
+    currentElement = null,
+    lastScrollTime = 0,
+    isHovering = false,
+    isExtensionEnabled = false,
+    lastScrollDirection = 'down';
 
 // 从存储中恢复设置
 chrome.storage.local.get(['scrollSpeed', 'scrollDirection', 'isEnabled'], (result) => {
@@ -25,31 +25,10 @@ chrome.storage.local.get(['scrollSpeed', 'scrollDirection', 'isEnabled'], (resul
 });
 
 // 鼠标移动事件处理
-document.addEventListener('mousemove', (e) => {
-  // 如果扩展被禁用或不处于滚动状态，直接返回
-  if (!isExtensionEnabled || !isScrolling) return;
-  
-  currentElement = e.target;
-  isHovering = true;
-  
-  // 添加防抖，减少不必要的处理
-  clearTimeout(window.moveDebounce);
-  window.moveDebounce = setTimeout(() => {
-    // 200ms内没有移动，确认为悬停状态
-    isHovering = true;
-  }, 200);
-});
+document.addEventListener('mousemove', handleMouseMove);
 
 // 鼠标离开事件处理
-document.addEventListener('mouseout', (e) => {
-  // 如果扩展被禁用或不处于滚动状态，直接返回
-  if (!isExtensionEnabled || !isScrolling) return;
-  
-  if (e.target === currentElement) {
-    currentElement = null;
-    isHovering = false;
-  }
-});
+document.addEventListener('mouseout', handleMouseOut);
 
 // 添加键盘快捷键支持
 document.addEventListener('keydown', (e) => {
@@ -70,8 +49,8 @@ document.addEventListener('keydown', (e) => {
     }
   }
   
-  // Alt+D 切换滚动方向
-  if (e.altKey && e.key === 'd') {
+  // Alt+X 切换滚动方向
+  if (e.altKey && e.key === 'x') {
     // 只有在扩展启用时才允许切换滚动方向
     if (isExtensionEnabled) {
       scrollDirection = scrollDirection === 'down' ? 'up' : 'down';
@@ -85,13 +64,17 @@ document.addEventListener('keydown', (e) => {
 
 // 集中的停止滚动函数 - 确保所有状态和定时器都被正确清除
 function stopScrolling() {
+  // 移除事件监听器
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseout', handleMouseOut);
+  
   // 确保定时器被清除
   if (scrollInterval) {
     clearInterval(scrollInterval);
     scrollInterval = null;
   }
   
-  // 重置所有相关状态变量
+  // 重置基本状态变量
   isScrolling = false;
   currentElement = null;
   isHovering = false;
@@ -103,21 +86,33 @@ function stopScrolling() {
     window.moveDebounce = null;
   }
   
-  // 确保不会有任何滚动行为
   console.log('滚动功能已停止');
+  
+  // 清除所有相关存储状态
+  // 彻底重置所有状态
+  chrome.storage.local.remove(['isEnabled', 'scrollSpeed', 'scrollDirection']);
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('mouseout', handleMouseOut);
 }
 
 // 滚动函数 - 使用requestAnimationFrame优化性能和平滑度
 function scroll() {
-  // 严格检查：如果扩展被禁用或不处于滚动状态，立即返回并确保停止所有滚动
+  // 严格的检查：如果扩展被禁用或不处于滚动状态，立即返回并确保停止所有滚动
+  //提供即时响应，基于当前脚本运行时的变量状态快速终止滚动流程（由于禁用扩展时未能及时更新变量可能没有及时同步，导致
+  // 当启动自动滚屏时禁用扩展会使当前页面保持自动滚动）
   if (!isExtensionEnabled || !isScrolling) {
-    // 如果滚动间隔仍然存在，清除它
-    if (scrollInterval) {
-      clearInterval(scrollInterval);
-      scrollInterval = null;
-    }
+    stopScrolling();
     return;
   }
+  
+  // 双重验证全局禁用状态（从浏览器存储获取数据确保与持久化存储的状态一致，从而提高代码的健壮性和可靠性）
+  chrome.storage.local.get(['isEnabled'], (result) => {
+    if (result.isEnabled === false) {
+      isExtensionEnabled = false;
+      stopScrolling();
+      return;
+    }
+  });
   // 如果没有当前元素或不处于悬停状态，也返回
   if (!currentElement || !isHovering) return;
   
@@ -179,6 +174,32 @@ function isScrollable(element) {
     (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay');
   
   return isVerticalScrollable || isHorizontalScrollable;
+}
+
+// 提取事件处理函数以便于移除
+function handleMouseMove(e) {
+  // 如果扩展被禁用或不处于滚动状态，直接返回
+  if (!isExtensionEnabled || !isScrolling) return;
+  
+  currentElement = e.target;
+  isHovering = true;
+  
+  // 添加防抖，减少不必要的处理
+  clearTimeout(window.moveDebounce);
+  window.moveDebounce = setTimeout(() => {
+    // 200ms内没有移动，确认为悬停状态
+    isHovering = true;
+  }, 200);
+}
+
+function handleMouseOut(e) {
+  // 如果扩展被禁用或不处于滚动状态，直接返回
+  if (!isExtensionEnabled || !isScrolling) return;
+  
+  if (e.target === currentElement) {
+    currentElement = null;
+    isHovering = false;
+  }
 }
 
 // 监听来自popup的消息 - 增强通信能力和错误处理
@@ -244,4 +265,12 @@ chrome.runtime.sendMessage({action: 'contentScriptReady'});
 // 页面卸载时清理资源
 window.addEventListener('unload', () => {
   stopScrolling();
+});
+
+// 添加扩展禁用消息监听
+chrome.runtime.onMessage.addListener((request) => {
+  if (request.action === 'extensionDisabled') {
+    isExtensionEnabled = false;
+    stopScrolling();
+  }
 });

@@ -26,7 +26,8 @@ chrome.runtime.onInstalled.addListener((details) => {
     // 设置默认配置
     chrome.storage.local.set({
       scrollSpeed: 1, // 默认使用最低速度
-      scrollDirection: 'down'
+      scrollDirection: 'down',
+      isEnabled: false // 默认禁用状态
     });
   } else if (details.reason === 'update') {
     console.log('Mouse Scroller 扩展已更新');
@@ -92,11 +93,75 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return false; // 不使用异步响应
 });
 
+// 监听快捷键命令
+chrome.commands.onCommand.addListener(async (command) => {
+  // 获取当前活动标签页
+  const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+  if (tabs.length === 0) return;
+  
+  const tab = tabs[0];
+  
+  if (command === 'toggle-scrolling') {
+    // 发送消息给content script切换滚动状态
+    chrome.tabs.sendMessage(tab.id, {
+      action: 'toggleScrolling',
+      enabled: true
+    });
+  } else if (command === 'toggle-direction') {
+    // 发送消息给content script切换滚动方向
+    const currentDirection = tabStates[tab.id]?.scrollDirection || 'down';
+    const newDirection = currentDirection === 'down' ? 'up' : 'down';
+    
+    chrome.tabs.sendMessage(tab.id, {
+      action: 'updateDirection',
+      direction: newDirection
+    });
+  }
+});
+
 // 监听标签页关闭事件，清理相关状态
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (tabStates[tabId]) {
     delete tabStates[tabId];
     console.log(`标签页 ${tabId} 已关闭，状态已清理`);
+  }
+});
+
+// 监听扩展禁用事件
+chrome.management.onDisabled.addListener(async (info) => {
+  if (info.id === chrome.runtime.id) {
+    console.log('Mouse Scroller 扩展已禁用');
+    
+    // 清理所有标签页状态
+    const tabs = await chrome.tabs.query({});
+    tabs.forEach(tab => {
+      // 向每个标签页发送停止滚动的消息，添加重试机制
+      const sendDisableMessage = (retryCount = 0) => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'extensionDisabled'
+        })
+          .catch(() => {
+            if (retryCount < 3) {
+              // 重试最多3次
+              setTimeout(() => sendDisableMessage(retryCount + 1), 200);
+            }
+          });
+      };
+      
+      sendDisableMessage();
+      
+      // 清理标签页状态
+      if (tabStates[tab.id]) {
+        delete tabStates[tab.id];
+      }
+    });
+    
+    // 全面清理存储状态
+    chrome.storage.local.remove(['isEnabled', 'scrollSpeed', 'scrollDirection']);
+    
+    // 清除所有标签页状态
+    tabStates = {};
+    console.log('已清除所有标签页状态和存储数据');
   }
 });
 
