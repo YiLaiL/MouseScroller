@@ -14,7 +14,7 @@ const MAX_RETRY_ATTEMPTS = 3;
 // 从存储中恢复设置
 function loadSavedSettings() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['scrollSpeed', 'scrollDirection', 'smoothScroll', 'enableShortcuts'], (result) => {
+    chrome.storage.local.get(['scrollSpeed', 'scrollDirection', 'smoothScroll'], (result) => {
       if (result.scrollSpeed) {
         scrollSpeed.value = result.scrollSpeed;
         speedValue.textContent = result.scrollSpeed;
@@ -26,10 +26,6 @@ function loadSavedSettings() {
       
       if (result.smoothScroll !== undefined) {
         smoothScroll = result.smoothScroll;
-      }
-      
-      if (result.enableShortcuts !== undefined) {
-        enableShortcuts = result.enableShortcuts;
       }
       
       resolve();

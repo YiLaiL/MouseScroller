@@ -30,37 +30,7 @@ document.addEventListener('mousemove', handleMouseMove);
 // 鼠标离开事件处理
 document.addEventListener('mouseout', handleMouseOut);
 
-// 添加键盘快捷键支持
-document.addEventListener('keydown', (e) => {
-  // Alt+S 切换滚动状态
-  if (e.altKey && e.key === 's') {
-    // 只有在扩展启用时才允许切换滚动状态
-    if (isExtensionEnabled) {
-      isScrolling = !isScrolling;
-      if (isScrolling) {
-        if (!scrollInterval) {
-          scrollInterval = setInterval(scroll, 16); // 约60fps的刷新率
-        }
-      } else {
-        stopScrolling(); // 使用集中的停止滚动函数
-      }
-      // 通知popup状态变化
-      chrome.runtime.sendMessage({action: 'statusChanged', isScrolling});
-    }
-  }
-  
-  // Alt+X 切换滚动方向
-  if (e.altKey && e.key === 'x') {
-    // 只有在扩展启用时才允许切换滚动方向
-    if (isExtensionEnabled) {
-      scrollDirection = scrollDirection === 'down' ? 'up' : 'down';
-      lastScrollDirection = scrollDirection; // 同步更新缓存的方向
-      chrome.storage.local.set({scrollDirection});
-      // 通知popup状态变化
-      chrome.runtime.sendMessage({action: 'directionChanged', scrollDirection});
-    }
-  }
-});
+// 已移除键盘快捷键支持
 
 // 集中的停止滚动函数 - 确保所有状态和定时器都被正确清除
 function stopScrolling() {

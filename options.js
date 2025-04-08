@@ -3,7 +3,6 @@ const defaultSpeed = document.getElementById('default-speed');
 const speedValue = document.getElementById('speed-value');
 const defaultDirection = document.getElementById('default-direction');
 const smoothScroll = document.getElementById('smooth-scroll');
-const enableShortcuts = document.getElementById('enable-shortcuts');
 const autoStart = document.getElementById('auto-start');
 const rememberState = document.getElementById('remember-state');
 const saveButton = document.getElementById('save-button');
@@ -37,8 +36,7 @@ function saveSettings() {
     scrollSpeed: parseInt(defaultSpeed.value),
     scrollDirection: defaultDirection.value,
     smoothScroll: smoothScroll.checked,
-    enableShortcuts: enableShortcuts.checked,
-    autoStart: autoStart.checked,
+        autoStart: autoStart.checked,
     rememberState: rememberState.checked
   }, () => {
     // 显示保存成功消息
