@@ -5,9 +5,15 @@
   <title>Mouse Scroller</title>
   <style>
     body {
-      width: 250px;
+      width: 280px;
       padding: 15px;
       font-family: Arial, sans-serif;
+      transition: background-color 0.3s;
+    }
+    
+    /* 滚动激活状态的样式 */
+    body.scrolling-active {
+      background-color: #f0f8ff;
     }
     .container {
       display: flex;
@@ -18,6 +24,21 @@
       font-size: 18px;
       font-weight: bold;
       margin-bottom: 10px;
+      text-align: center;
+      color: #2196F3;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+    
+    /* 错误消息样式 */
+    .error-message {
+      background-color: #ffebee;
+      color: #d32f2f;
+      padding: 8px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 12px;
+      display: none;
       text-align: center;
     }
     .toggle-container {
@@ -81,6 +102,68 @@
       font-style: italic;
       color: #666;
       margin-top: 10px;
+      transition: color 0.3s;
+    }
+    
+    /* 方向控制样式 */
+    .direction-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 5px;
+    }
+    
+    .direction-toggle {
+      background-color: #e0e0e0;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: background-color 0.3s;
+    }
+    
+    .direction-toggle:hover {
+      background-color: #d0d0d0;
+    }
+    
+    .direction-toggle.down {
+      color: #2196F3;
+    }
+    
+    .direction-toggle.up {
+      color: #f44336;
+    }
+    
+    .direction-toggle::before {
+      content: '';
+      display: inline-block;
+      width: 0;
+      height: 0;
+      margin-right: 5px;
+    }
+    
+    .direction-toggle.down::before {
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 5px solid currentColor;
+    }
+    
+    .direction-toggle.up::before {
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 5px solid currentColor;
+    }
+    
+    /* 键盘快捷键提示 */
+    .shortcuts {
+      font-size: 11px;
+      color: #757575;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #eee;
+      text-align: center;
     }
   </style>
 </head>
@@ -98,11 +181,20 @@
     
     <div class="speed-container">
       <span>滚动速度：</span>
-      <input type="range" min="1" max="10" value="1" class="speed-slider" id="scroll-speed">
+      <input type="range" min="1" max="100" value="1" class="speed-slider" id="scroll-speed">
       <div class="speed-value" id="speed-value">1</div>
+      <div style="font-size: 11px; color: #757575; text-align: center; margin-top: 3px;">速度范围：1-100 (>10为快速模式)</div>
+    </div>
+    
+    <div class="direction-container">
+      <span>滚动方向：</span>
+      <button id="direction-toggle" class="direction-toggle down" title="点击切换滚动方向">
+        <span id="direction-text">向下滚动</span>
+      </button>
     </div>
     
     <div class="status" id="status">滚动功能已禁用</div>
+    <div class="error-message" id="error-message"></div>
   </div>
   
   <script src="popup.js"></script>
